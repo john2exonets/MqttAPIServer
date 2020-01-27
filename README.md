@@ -3,7 +3,7 @@ REST API Server that collects up MQTT packets and stores them for retrieval by a
 
 This API Server can be used by web page Javascript to populate tables and whatnot.
 
-##Usage
+Usage:
 
 	$.getJSON('http://10.1.1.28:4299/api/dump', (data) => {
           data.forEach((v) => {
