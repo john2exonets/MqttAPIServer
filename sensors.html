@@ -1,0 +1,210 @@
+<!DOCTYPE html><html class=''>
+<head><meta charset='UTF-8'>
+<meta http-equiv='cache-control' content='no-cache'>
+<meta http-equiv='expires' content='0'>
+<meta http-equiv='pragma' content='no-cache'>
+<title>Home Sensors</title>
+<script type="text/javascript" src="http://code.jquery.com/jquery-1.7.2.min.js"></script>
+
+<script>
+var GBUF = 1000;	// Gusts Buffer
+var PBUF = 60;		// Pressure Buffer
+var values =[];
+for(var j = 0; j < 30; j++) { values[j] = ""; }
+var names = [
+  "Outside Temp",			// 0
+  "Outside Humidity",			// 1
+  "Heat Index",				// 2
+  "Wind Direction",			// 3
+  "Wind Speed",				// 4
+  "Wind Gust/5 min",			// 5
+  "Wind Chill",				// 6
+  "Barometric Pressure",		// 7
+];
+
+var lastTemp = 0.0;
+var tempC = 0.0;
+var lastHumid = 0.0;
+var lastGust = 0.0;
+var lastRad = 0;
+var lastPressure = 0.0;
+var gptr = 0;
+var g = [GBUF];			// Gust array
+for (var i = 0; i < GBUF; i++) { g[i] = 0.0; }
+var p = [PBUF];
+for (var i = 0; i < PBUF; i++) { p[i] = 0.0; }
+var pptr = 0;
+var mptr = 1;
+var viewFlag = true;
+
+//------------------------------------------
+// Function: getHeatIndex()
+// http://www.wpc.ncep.noaa.gov/html/heatindex_equation.shtml
+//------------------------------------------
+function getHeatIndex(temp, rh) {
+  // temp = Current temprature in degrees F
+  // rh = Current Humidity in percent
+  var ts = 0.5 * (temp + 61.0 + ((temp-68.0)*1.2) + (rh*0.094));
+  if ((ts+temp)/2 > 79) {
+    var tt = -42.379 + 2.04901523*temp + 10.14333127*rh - 0.22475541*temp*rh - 0.00683783*temp*temp - 0.05481717*rh*rh + 0.00122874*temp*temp*rh + 0.00085282*temp*rh*rh - 0.00000199*temp*temp*rh*rh;
+    if (rh < 13 && temp >79 && temp <113) {
+      tt -= ((13-rh)/4) * Math.sqrt((17-Math.abs(temp-95))/17);
+      return Math.round(tt);
+    } else if (rh > 85 && temp >79 && temp <88) {
+      tt += ((rh-85)/10) * ((87-temp)/5);
+      return Math.round(tt);
+    } else {
+      return Math.round(tt);
+    }
+  } else {
+    return Math.round(ts);
+  }
+}
+
+//------------------------------------------
+// Function: getWindChill()
+// https://en.wikipedia.org/wiki/Wind_chill
+//------------------------------------------
+function getWindChill(temp, ws) {
+  // temp =  Current Temprature
+  // ws = Current Wind Speed
+  var tt;
+  if (temp < 50 && ws > 3) {
+    tt = 35.64 + (0.6215 * temp) - (35.75 * (Math.pow(ws, 0.16))) + (0.4275 * temp * Math.pow(ws, 0.16));
+    return Math.round(tt);
+  } else {
+    return Math.round(temp);
+  }
+}
+
+//------------------------------------------
+// Function: setHeatIndex()
+//------------------------------------------
+function setHeatIndex() {
+   var hi = getHeatIndex(lastTemp, lastHumid);
+   if (Math.round(lastTemp) >= hi) {
+     values[2] = "--&deg;F";
+   } else {
+     values[2] = hi.toString() + "&deg;F";
+   }
+   setTimeout(setHeatIndex, 180000);   // Every 3 Minutes.
+}
+
+//------------------------------------------
+// Function: setWindChill()
+//------------------------------------------
+function setWindChill() {
+   var wc = getWindChill(lastTemp, lastGust);
+   if (Math.round(lastTemp) <= wc) {
+     values[6] = "--&deg;F";
+   } else {
+     values[6] = wc.toString() + "&deg;F";
+   }
+}
+
+//------------------------------------------
+// Function: setWinGust()
+//------------------------------------------
+function setWindGust() {
+   var max = g.reduce(function(a,b) {
+      return Math.max(a,b);
+   });
+   lastGust = max;
+   for(var i = 0;i < GBUF; i++) { g[i] = 0.0; }
+   gptr = 0;
+   values[5] = Math.round(max).toString() + " Mph";
+   setWindChill();
+   setTimeout(setWindGust, 300000);	// Every 5 Minutes.
+}
+
+//------------------------------------------
+// Function: setPressureDir()
+//------------------------------------------
+function setPressureDir() {
+  var ind = "";
+  p[pptr] = lastPressure;
+  if (p[pptr] > p[mptr]) { ind = "&#9650;"; }
+  if (p[pptr] < p[mptr]) { ind = "&#9660;"; }
+  if (p[pptr] == p[mptr]) { ind = "&#9654;"; }
+  pptr++;
+  mptr++;
+  if(pptr == PBUF) { pptr = 0; }
+  if(mptr == PBUF) { mptr = 0; }
+  values[7] = ind + lastPressure.toFixed(2).toString() + " inHg";  
+  setTimeout(setPressureDir, 60000);	// Every Minute
+}
+
+//------------------------------------------
+// Function: update()
+//  Update the webpage.
+//------------------------------------------
+function update() {
+   viewFlag = true;
+   $.getJSON('http://10.1.1.28:4299/api/dump', function(data) {
+//      console.log(">>Return from dump:" + data.length);
+      out = "";
+      data.forEach( function(v) {
+         if (v.topic.indexOf("humid/read/Out1") != -1) {
+            values[1] = Math.round(v.payload.humid).toString() + "%";
+            lastHumid = v.payload.humid;
+            return;
+         }
+         if (v.topic.indexOf("temp/read/Out2") != -1) {
+            tempC = (v.payload.temp - 32) * (5/9);
+            values[0] = Math.round(v.payload.temp).toString() + "&deg;F  " + Math.round(tempC).toString() + "&deg;C";
+            lastTemp = v.payload.temp;
+            return;
+         }
+         if (v.topic.indexOf("wind/dir/Out2") != -1) {
+            values[3] = v.payload.dir;
+            return;
+         }
+         if (v.topic.indexOf("wind/speed/Out2") != -1) {
+            values[4] = Math.round(v.payload.speed).toString() + " Mph";
+            g[gptr] = v.payload.speed;
+            gptr++;
+            return;
+         }
+         if (v.topic.indexOf("pressure/read/Out2") != -1) {
+            lastPressure = v.payload.pressure;
+            return;
+         }
+      });
+      //
+      // Gen Table
+      if (!viewFlag) {
+        values[0] = values[1] = values[3] = values[4] = values[7] = " "; 
+      }
+      try {
+        out += "<tr><th>Name</th><th>Value</th></tr>";
+        names.forEach(function(k,i) {
+          out += "<tr><td>" + k + "</td><td>" + values[i] + "</td></tr>";      
+        });
+        $('#sensors').html(out);
+      } catch(e) {
+        console.log("E:>" + e);
+      }
+   });
+   setTimeout(update, 3000);
+}
+
+//-------------------------------------------------------------
+//-----------------------[    MAIN    ]------------------------
+//-------------------------------------------------------------
+
+update();
+setTimeout(setPressureDir, 60000); // 1 minute
+setTimeout(setHeatIndex, 180000);  // 3 minutes
+setTimeout(setWindGust, 300000);   // 5 minutes
+</script>
+
+</head>
+
+<body style="background-color:black; color=white">
+  <span style="color:white; font-size:45px">Home Sensors</span>
+  <table id="sensors" border=1 padding=3" style="color: white; font-size:30px;" >
+  </table>
+</body>
+
+</html>
+

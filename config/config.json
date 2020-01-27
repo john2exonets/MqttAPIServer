@@ -1,0 +1,10 @@
+{
+   "mqtt_broker": "mqtt://10.1.1.28",
+   "debug": true,
+   "apiPort": 4299,
+   "ignoreList": [
+     "azle/home",
+     "info/ip/Out1",
+     "info/ssid/Out1"
+   ]
+}

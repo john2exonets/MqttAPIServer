@@ -1,0 +1,31 @@
+{
+  "name": "mqttAPI",
+  "version": "1.0.0",
+  "description": "MQTT-to-REST API bridge",
+  "main": "apiServer.js",
+  "scripts": {
+    "test": "echo \"Error: No tests specified.\" && exit 1",
+    "start": "node apiServer.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/john2exonets/MqttAPIServer.git"
+  },
+  "keywords": [
+    "RESTful",
+    "API",
+    "MQTT",
+    "NodeJS"
+  ],
+  "author": "John D. Allen",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^1.12"
+  },
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "express": "^4.16",
+    "ip": "^1.1.5",
+    "mqtt": "^2.6"
+  }
+}
